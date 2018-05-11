@@ -1,13 +1,11 @@
 import time
 import random
 from concurrent import futures
-
 import sys
 sys.path.insert(0, '../../grpc')
 import grpc
 import rohobon_message_pb2
 import rohobon_message_pb2_grpc
-
 from env import Env
 from action_dict import action_dict
 from det_silence import det_silence
@@ -19,15 +17,34 @@ class Servicer(rohobon_message_pb2_grpc.RoBoHoNMessageServicer):
         #print('Got a request type: ', request.request)
         return rohobon_message_pb2.desktop(info=GetInfo())
 
-    def GetInfo():
-	    #Combine with the UI
-	    global action_id
-	    if action_id == None:
-	        info = 'empty'
-	    else:
-	        info = action_id
-	        action_id = None
-	    return info
+def GetInfo():
+    #Combine with the UI
+    global action_id
+    if action_id == None:
+        info = 'empty'
+    else:
+        info = action_id
+        action_id = None
+    return info
+
+def do_action(self, action_key):
+    action_values = self.action_dict.get(action_key)
+    print(action_values)
+    for i in range (len(action_values)):
+        global action_id
+        action_id = 'm' + action_key + str(i+1)
+        time.sleep(1.5)
+        #raw_input('Please press enter to continue: ')
+        if action_values[i] is 'b':
+            speech = det_silence(3000)
+            while not speech:
+                print ("I didn't hear you") #Send a proactive response
+                speech = det_silence(3000)
+        elif action_values[i] is 'a':
+            det_silence()
+        else:
+            det_silence(action_values[i])  
+
 
 class RL(object):
     def __init__(self, args):
@@ -54,21 +71,7 @@ class RL(object):
             epi_reward = 0.0
 
             #Do "Introduction"
-            action_now_num = 0
-            action_now = {'ma100', ['b','b','a','b','b','a']}
-            for i in range(len(action_now.values()[action_now_num])):
-                global action_id
-                action_id = action_now.keys()[action_now_num] + str(i+1)
-                time.sleep(1.5)
-                if action_now.values()[i] is 'b':
-                    speech = det_silence(5000)
-                    while not speech:
-                        print("I didn't hear you") # Send a proactive response
-                        speech = det_silence(5000)
-                else:
-                    speech = det_silence(5000)
-                raw_input('Please press enter to continue: ')
-            
+            do_action(self, 'a100')
             s = self.env.GetInitState()
 
             #TODO
@@ -82,23 +85,13 @@ class RL(object):
                 #action = random.choice(self.action_dict.keys())
 
                 #If needed, stand up
-                if action in ['a300', 'a310', 'a311'] and sit:
-                    sub_action_num = 3
-                    for a in range(sub_action_num):
-                        global action_id
-                        action_id = 'ma200' + str(a+1)
-                        time.sleep(1.5)
-                        raw_input('Please press enter to continue: ')
-                    sit = False
+                do_action(self, 'a200')
+                sit = False
 
                 #Do the action
                 print(action_num) #TODO: test
-                sub_action_num = self.action_dict[action]
-                for a in range(sub_action_num):
-                    global action_id
-                    action_id = 'm' + str(action) + str(a+1)
-                    time.sleep(1.5)
-                    raw_input('Please press enter to continue: ')
+                do_action(self, action)    
+
                 #TODO
                 #del self.action_dict[action]
                 action_index.remove(action_num) 
@@ -106,8 +99,7 @@ class RL(object):
                 r, s2, t = self.env.Step(s)
 
                 #TODO: Update the Q table
-                self.ai.epsilon = max((10000-len(self.reward)*5)/10000.0 * self.ai.epsilon, \
-                        0.0)
+                self.ai.epsilon = max((10000-len(self.reward)*5)/10000.0 * self.ai.epsilon, 0.0)
                 a2 = self.ai.chooseAction(s2)
                 while a2 not in action_index:
                     a2 = self.ai.chooseAction(s2)
@@ -120,21 +112,11 @@ class RL(object):
                 action = self.action_dict.keys()[action_num]
 
                 if t:
-                    #Do "Take a photo"
-                    sub_action_num = 7
-                    for a in range(sub_action_num):
-                        global action_id
-                        action_id = 'ma320' + str(a+1)
-                        time.sleep(1.5)
-                        raw_input('Please press enter to continue: ')
+                    #Do "take a photo"
+                    do_action(self, 'a320')
 
                     #Do "Bye Bye"
-                    sub_action_num = 4
-                    for a in range(sub_action_num):
-                        global action_id
-                        action_id = 'ma101' + str(a+1)
-                        time.sleep(1.5)
-                        raw_input('Please press enter to continue: ')
+                    do_action(self, 'a101')
 
                     self.reward.append(epi_reward)
                     epi_num += 1
@@ -145,21 +127,7 @@ class RL(object):
         self._save_reward_q()
         self.server.stop(0)
 
-    ### Revise this code
-    def do_action(action_num):
-        action_now = self.action_dict[action_num]
-        for i in range(len(action_now.values()[action_now_num])):
-                global action_id
-                action_id = action_now.keys()[action_now_num] + str(i+1)
-                time.sleep(1.5)
-                if action_now.values()[i] is 'b':
-                    speech = det_silence(5000)
-                    while not speech:
-                        print("I didn't hear you") # Send a proactive response
-                        speech = det_silence(5000)
-                else:
-                    speech = det_silence(5000)
-                raw_input('Please press enter to continue: ')
+
 
     def _restore(self, q_file, r_file):
         import pickle
@@ -170,6 +138,7 @@ class RL(object):
         import pickle
         pickle.dump(self.reward, open('./reward', 'wb'))
         pickle.dump(self.ai.q, open('./q', 'wb'))
+
 
 if __name__ == '__main__':
     global action_id #Be careful when using global variables
