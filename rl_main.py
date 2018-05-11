@@ -10,8 +10,8 @@ import rohobon_message_pb2_grpc
 
 from env import Env
 from action_dict import action_dict
-import irl_sarsa as irl
 from det_silence import det_silence
+import irl_sarsa as irl
 
 class Servicer(rohobon_message_pb2_grpc.RoBoHoNMessageServicer):
     def RequestInfo(self, request, context):
@@ -19,15 +19,15 @@ class Servicer(rohobon_message_pb2_grpc.RoBoHoNMessageServicer):
         #print('Got a request type: ', request.request)
         return rohobon_message_pb2.desktop(info=GetInfo())
 
-def GetInfo():
-    #Combine with the UI
-    global action_id
-    if action_id == None:
-        info = 'empty'
-    else:
-        info = action_id
-        action_id = None
-    return info
+    def GetInfo():
+	    #Combine with the UI
+	    global action_id
+	    if action_id == None:
+	        info = 'empty'
+	    else:
+	        info = action_id
+	        action_id = None
+	    return info
 
 class RL(object):
     def __init__(self, args):
@@ -54,15 +54,20 @@ class RL(object):
             epi_reward = 0.0
 
             #Do "Introduction"
-            self.env.StartIpCam()
-            sub_action_num = 6
-            for a in range(sub_action_num):
+            action_now_num = 0
+            action_now = {'ma100', ['b','b','a','b','b','a']}
+            for i in range(len(action_now.values()[action_now_num])):
                 global action_id
-                action_id = 'ma100' + str(a+1)
+                action_id = action_now.keys()[action_now_num] + str(i+1)
                 time.sleep(1.5)
-                #raw_input('Please press enter to continue: ')
-                #det_silence needs as argument the time (in ms) it will wait after last sound was detected, default is 100 ms
-                det_silence(1000)
+                if action_now.values()[i] is 'b':
+                    speech = det_silence(5000)
+                    while not speech:
+                        print("I didn't hear you") # Send a proactive response
+                        speech = det_silence(5000)
+                else:
+                    speech = det_silence(5000)
+                raw_input('Please press enter to continue: ')
             
             s = self.env.GetInitState()
 
@@ -83,19 +88,17 @@ class RL(object):
                         global action_id
                         action_id = 'ma200' + str(a+1)
                         time.sleep(1.5)
-                        det_silence()
+                        raw_input('Please press enter to continue: ')
                     sit = False
 
                 #Do the action
-                self.env.StartIpCam()
+                print(action_num) #TODO: test
                 sub_action_num = self.action_dict[action]
                 for a in range(sub_action_num):
                     global action_id
                     action_id = 'm' + str(action) + str(a+1)
                     time.sleep(1.5)
-                    #raw_input('Please press enter to continue: ')
-                    det_silence(2000)
-                        
+                    raw_input('Please press enter to continue: ')
                 #TODO
                 #del self.action_dict[action]
                 action_index.remove(action_num) 
@@ -123,27 +126,40 @@ class RL(object):
                         global action_id
                         action_id = 'ma320' + str(a+1)
                         time.sleep(1.5)
-                        #raw_input('Please press enter to continue: ')
-                        det_silence(1000)
-                        
+                        raw_input('Please press enter to continue: ')
+
                     #Do "Bye Bye"
                     sub_action_num = 4
                     for a in range(sub_action_num):
                         global action_id
                         action_id = 'ma101' + str(a+1)
                         time.sleep(1.5)
-                        #raw_input('Please press enter to continue: ')
-                        det_silence(1000)
-                        
+                        raw_input('Please press enter to continue: ')
+
                     self.reward.append(epi_reward)
                     epi_num += 1
                     break
 
-        self.env.ipCamStart = False
         raw_input('Please disconnect RoBoHoN and press enter to continue: ')
 
         self._save_reward_q()
         self.server.stop(0)
+
+    ### Revise this code
+    def do_action(action_num):
+        action_now = self.action_dict[action_num]
+        for i in range(len(action_now.values()[action_now_num])):
+                global action_id
+                action_id = action_now.keys()[action_now_num] + str(i+1)
+                time.sleep(1.5)
+                if action_now.values()[i] is 'b':
+                    speech = det_silence(5000)
+                    while not speech:
+                        print("I didn't hear you") # Send a proactive response
+                        speech = det_silence(5000)
+                else:
+                    speech = det_silence(5000)
+                raw_input('Please press enter to continue: ')
 
     def _restore(self, q_file, r_file):
         import pickle
